@@ -37,8 +37,13 @@ def custom_score(game, player):
         The heuristic value of the current game state to the specified player.
     """
 
-    # TODO: finish this function!
-    raise NotImplementedError
+    if game.is_loser(player):
+        return float("-inf")
+
+    if game.is_winner(player):
+        return float("inf")
+
+    return float(len(game.get_legal_moves(player)))
 
 
 class CustomPlayer:
@@ -171,9 +176,15 @@ class CustomPlayer:
         """
         if self.time_left() < self.TIMER_THRESHOLD:
             raise Timeout()
-
-        # TODO: finish this function!
-        raise NotImplementedError
+        _fn = max if maximizing_player else min
+        if depth == 1:
+            # When reaching to the leaf
+            return _fn([(self.score(game.forecast_move(m), self), m)
+                        for m in game.get_legal_moves()])
+        else:
+            # Go down next level
+            return _fn([(self.minimax(game.forecast_move(m), depth-1, not maximizing_player)[0], m)
+                        for m in game.get_legal_moves()])
 
     def alphabeta(self, game, depth, alpha=float("-inf"), beta=float("inf"), maximizing_player=True):
         """Implement minimax search with alpha-beta pruning as described in the
@@ -216,5 +227,50 @@ class CustomPlayer:
         if self.time_left() < self.TIMER_THRESHOLD:
             raise Timeout()
 
-        # TODO: finish this function!
-        raise NotImplementedError
+        # limits is a dictionary,
+        # each value is a tuple of storing alpha or beta with corresponding move
+        limits = {"alpha": (alpha, None),
+                  "beta": (beta, None)}
+        def get_check_fn(maximizing_player):
+            """Return a function of checking if score is able to prune the rest of moves,
+            or update the value of alpha or beta."""
+            if maximizing_player:
+                def _fn(score, move):
+                    if score >= limits["beta"][0]:
+                        # Prune the rest of moves
+                        return score, move
+                    if score > limits["alpha"][0]:
+                        # Update the value of alpha
+                        limits["alpha"] = (score, move)
+                    return None, None
+            else:
+                def _fn(score, move):
+                    if score <= limits["alpha"][0]:
+                        # Prune the rest of moves
+                        return score, move
+                    if score < limits["beta"][0]:
+                        # Update the value of beta
+                        limits["beta"] = (score, move)
+                    return None, None
+            return _fn
+        check_fn = get_check_fn(maximizing_player)
+
+        if depth == 1:
+            # When reaching to the leaf
+            for move in game.get_legal_moves():
+                score = self.score(game.forecast_move(move), self)
+                score, move = check_fn(score, move)
+                if move:
+                    return score, move
+        else:
+            # Go down next level
+            for move in game.get_legal_moves():
+                score, _ = self.alphabeta(game.forecast_move(move),
+                                          depth-1,
+                                          limits["alpha"][0],
+                                          limits["beta"][0],
+                                          not maximizing_player)
+                score, move = check_fn(score, move)
+                if score:
+                    return score, move
+        return limits["alpha"] if maximizing_player else limits["beta"]
