@@ -123,25 +123,29 @@ class CustomPlayer:
 
         self.time_left = time_left
 
-        # TODO: finish this function!
-
         # Perform any required initializations, including selecting an initial
         # move from the game board (i.e., an opening book), or returning
         # immediately if there are no legal moves
-
+        if not legal_moves:
+            return (-1, -1)
+        best_move = legal_moves[0]
         try:
             # The search method call (alpha beta or minimax) should happen in
             # here in order to avoid timeout. The try/except block will
             # automatically catch the exception raised by the search method
             # when the timer gets close to expiring
-            pass
-
+            search_fn = self.minimax if self.method == "minimax" else self.alphabeta
+            if self.iterative:
+                depth = 1
+                while True:
+                    _, best_move = search_fn(game.copy(), depth)
+                    depth += 1
         except Timeout:
             # Handle any actions required at timeout, if necessary
-            pass
+            print("Depth {}: Timeout of iterative deepening.".format(depth))
 
         # Return the best move from the last completed search iteration
-        raise NotImplementedError
+        return best_move
 
     def minimax(self, game, depth, maximizing_player=True):
         """Implement the minimax search algorithm as described in the lectures.
@@ -176,15 +180,17 @@ class CustomPlayer:
         """
         if self.time_left() < self.TIMER_THRESHOLD:
             raise Timeout()
+        legal_moves = game.get_legal_moves()
+        if not legal_moves:
+            return 0.0, (-1, -1)
         _fn = max if maximizing_player else min
         if depth == 1:
             # When reaching to the leaf
-            return _fn([(self.score(game.forecast_move(m), self), m)
-                        for m in game.get_legal_moves()])
+            return _fn([(self.score(game.forecast_move(m), self), m) for m in legal_moves])
         else:
             # Go down next level
             return _fn([(self.minimax(game.forecast_move(m), depth-1, not maximizing_player)[0], m)
-                        for m in game.get_legal_moves()])
+                        for m in legal_moves])
 
     def alphabeta(self, game, depth, alpha=float("-inf"), beta=float("inf"), maximizing_player=True):
         """Implement minimax search with alpha-beta pruning as described in the
@@ -226,7 +232,9 @@ class CustomPlayer:
         """
         if self.time_left() < self.TIMER_THRESHOLD:
             raise Timeout()
-
+        legal_moves = game.get_legal_moves()
+        if not legal_moves:
+            return 0.0, (-1, -1)
         # limits is a dictionary,
         # each value is a tuple of storing alpha or beta with corresponding move
         limits = {"alpha": (alpha, None),
@@ -257,14 +265,14 @@ class CustomPlayer:
 
         if depth == 1:
             # When reaching to the leaf
-            for move in game.get_legal_moves():
+            for move in legal_moves:
                 score = self.score(game.forecast_move(move), self)
                 score, move = check_fn(score, move)
                 if move:
                     return score, move
         else:
             # Go down next level
-            for move in game.get_legal_moves():
+            for move in legal_moves:
                 score, _ = self.alphabeta(game.forecast_move(move),
                                           depth-1,
                                           limits["alpha"][0],
