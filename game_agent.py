@@ -6,13 +6,12 @@ augment the test suite with your own test cases to further test your code.
 You must test your agent's strength against a set of agents with known
 relative strength using tournament.py and include the results in your report.
 """
-import random
+import random, math
 
 
 class Timeout(Exception):
     """Subclass base exception for code clarity."""
     pass
-
 
 def custom_score(game, player):
     """Calculate the heuristic value of a game state from the point of view
@@ -42,8 +41,11 @@ def custom_score(game, player):
 
     if game.is_winner(player):
         return float("inf")
-
-    return float(len(game.get_legal_moves(player)))
+    own_moves = len(game.get_legal_moves(player))
+    opp_moves = len(game.get_legal_moves(game.get_opponent(player)))
+    w, h = game.width, game.height
+    blanks = len(game.get_blank_spaces())
+    return (own_moves-(0.1+w*h-blanks)*opp_moves) / (blanks+own_moves-opp_moves)
 
 
 class CustomPlayer:
@@ -77,7 +79,7 @@ class CustomPlayer:
     """
 
     def __init__(self, search_depth=3, score_fn=custom_score,
-                 iterative=True, method='minimax', timeout=10.):
+                 iterative=True, method='minimax', timeout=20.):
         self.search_depth = search_depth
         self.iterative = iterative
         self.score = score_fn
@@ -128,22 +130,24 @@ class CustomPlayer:
         # immediately if there are no legal moves
         if not legal_moves:
             return (-1, -1)
-        best_move = legal_moves[0]
+        
+        center = (game.width/2, game.height/2)
+        best_move = center if center in legal_moves else legal_moves[random.randint(0, len(legal_moves) - 1)]
+        if not self.iterative:
+            return best_move
         try:
             # The search method call (alpha beta or minimax) should happen in
             # here in order to avoid timeout. The try/except block will
             # automatically catch the exception raised by the search method
             # when the timer gets close to expiring
+            depth = 1
             search_fn = self.minimax if self.method == "minimax" else self.alphabeta
-            if self.iterative:
-                depth = 1
-                while True:
-                    _, best_move = search_fn(game.copy(), depth)
-                    depth += 1
+            while True:
+                _, best_move = search_fn(game.copy(), depth)
+                depth += 1
         except Timeout:
             # Handle any actions required at timeout, if necessary
-            print("Depth {}: Timeout of iterative deepening.".format(depth))
-
+            pass
         # Return the best move from the last completed search iteration
         return best_move
 
@@ -182,7 +186,8 @@ class CustomPlayer:
             raise Timeout()
         legal_moves = game.get_legal_moves()
         if not legal_moves:
-            return 0.0, (-1, -1)
+            # Check if player is the winner
+            return (float("-inf"), (-1, -1)) if game.is_loser(self) else (float("inf"), (-1, -1))
         _fn = max if maximizing_player else min
         if depth == 1:
             # When reaching to the leaf
@@ -234,7 +239,8 @@ class CustomPlayer:
             raise Timeout()
         legal_moves = game.get_legal_moves()
         if not legal_moves:
-            return 0.0, (-1, -1)
+            # Check if player is the winner
+            return (float("-inf"), (-1, -1)) if game.is_loser(self) else (float("inf"), (-1, -1))
         # limits is a dictionary,
         # each value is a tuple of storing alpha or beta with corresponding move
         limits = {"alpha": (alpha, None),
@@ -266,8 +272,7 @@ class CustomPlayer:
         if depth == 1:
             # When reaching to the leaf
             for move in legal_moves:
-                score = self.score(game.forecast_move(move), self)
-                score, move = check_fn(score, move)
+                score, move = check_fn(self.score(game.forecast_move(move), self), move)
                 if move:
                     return score, move
         else:
@@ -279,6 +284,6 @@ class CustomPlayer:
                                           limits["beta"][0],
                                           not maximizing_player)
                 score, move = check_fn(score, move)
-                if score:
+                if move:
                     return score, move
         return limits["alpha"] if maximizing_player else limits["beta"]
