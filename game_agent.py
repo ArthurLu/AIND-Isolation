@@ -13,6 +13,30 @@ class Timeout(Exception):
     """Subclass base exception for code clarity."""
     pass
 
+def student1 (game, player):
+    """Return the score based on my first formula."""
+    own_moves = len(game.get_legal_moves(player))
+    opp_moves = len(game.get_legal_moves(game.get_opponent(player)))
+    w, h = game.width, game.height
+    blanks = len(game.get_blank_spaces())
+    return (own_moves-(0.1+w*h-blanks)*opp_moves) / (own_moves+(0.1+w*h-blanks)*opp_moves)
+
+def student2 (game, player):
+    """Return the score based on my second formula."""
+    own_moves = len(game.get_legal_moves(player))
+    opp_moves = len(game.get_legal_moves(game.get_opponent(player)))
+    w, h = game.width, game.height
+    blanks = len(game.get_blank_spaces())
+    return (own_moves-(0.1+w*h-1.5*blanks)*opp_moves) / (own_moves+(0.1+w*h-1.5*blanks)*opp_moves)
+
+def student3 (game, player):
+    """Return the score based on my third formula."""
+    own_moves = len(game.get_legal_moves(player))
+    opp_moves = len(game.get_legal_moves(game.get_opponent(player)))
+    w, h = game.width, game.height
+    blanks = len(game.get_blank_spaces())
+    return (own_moves-(0.1+w*h-blanks)*opp_moves) / (blanks+own_moves-opp_moves)
+
 def custom_score(game, player):
     """Calculate the heuristic value of a game state from the point of view
     of the given player.
@@ -41,11 +65,7 @@ def custom_score(game, player):
 
     if game.is_winner(player):
         return float("inf")
-    own_moves = len(game.get_legal_moves(player))
-    opp_moves = len(game.get_legal_moves(game.get_opponent(player)))
-    w, h = game.width, game.height
-    blanks = len(game.get_blank_spaces())
-    return (own_moves-(0.1+w*h-blanks)*opp_moves) / (blanks+own_moves-opp_moves)
+    return student3(game, player)
 
 
 class CustomPlayer:
@@ -186,8 +206,7 @@ class CustomPlayer:
             raise Timeout()
         legal_moves = game.get_legal_moves()
         if not legal_moves:
-            # Check if player is the winner
-            return (float("-inf"), (-1, -1)) if game.is_loser(self) else (float("inf"), (-1, -1))
+            return self.score(game, self), (-1, -1)
         _fn = max if maximizing_player else min
         if depth == 1:
             # When reaching to the leaf
@@ -237,34 +256,33 @@ class CustomPlayer:
         """
         if self.time_left() < self.TIMER_THRESHOLD:
             raise Timeout()
-        legal_moves = game.get_legal_moves()
+        legal_moves, best_move = game.get_legal_moves(), (-1, -1)
         if not legal_moves:
-            # Check if player is the winner
-            return (float("-inf"), (-1, -1)) if game.is_loser(self) else (float("inf"), (-1, -1))
-        # limits is a dictionary,
-        # each value is a tuple of storing alpha or beta with corresponding move
-        limits = {"alpha": (alpha, None),
-                  "beta": (beta, None)}
+            return self.score(game, self), best_move
+        # references used for pass the reference of variable into check_fn to update the values
+        references = {"alpha": alpha,
+                      "beta": beta,
+                      "best_move": best_move}
         def get_check_fn(maximizing_player):
             """Return a function of checking if score is able to prune the rest of moves,
             or update the value of alpha or beta."""
             if maximizing_player:
                 def _fn(score, move):
-                    if score >= limits["beta"][0]:
+                    if score >= references["beta"]:
                         # Prune the rest of moves
                         return score, move
-                    if score > limits["alpha"][0]:
+                    if score > references["alpha"]:
                         # Update the value of alpha
-                        limits["alpha"] = (score, move)
+                        references["alpha"], references["best_move"] = score, move
                     return None, None
             else:
                 def _fn(score, move):
-                    if score <= limits["alpha"][0]:
+                    if score <= references["alpha"]:
                         # Prune the rest of moves
                         return score, move
-                    if score < limits["beta"][0]:
+                    if score < references["beta"]:
                         # Update the value of beta
-                        limits["beta"] = (score, move)
+                        references["beta"], references["best_move"] = score, move
                     return None, None
             return _fn
         check_fn = get_check_fn(maximizing_player)
@@ -280,10 +298,13 @@ class CustomPlayer:
             for move in legal_moves:
                 score, _ = self.alphabeta(game.forecast_move(move),
                                           depth-1,
-                                          limits["alpha"][0],
-                                          limits["beta"][0],
+                                          references["alpha"],
+                                          references["beta"],
                                           not maximizing_player)
                 score, move = check_fn(score, move)
                 if move:
                     return score, move
-        return limits["alpha"] if maximizing_player else limits["beta"]
+        if maximizing_player:
+            return references["alpha"], references["best_move"]
+        else:
+            return references["beta"], references["best_move"]
