@@ -256,55 +256,27 @@ class CustomPlayer:
         """
         if self.time_left() < self.TIMER_THRESHOLD:
             raise Timeout()
-        legal_moves, best_move = game.get_legal_moves(), (-1, -1)
-        if not legal_moves:
-            return self.score(game, self), best_move
-        # references used for pass the reference of variable into check_fn to update the values
-        references = {"alpha": alpha,
-                      "beta": beta,
-                      "best_move": best_move}
-        def get_check_fn(maximizing_player):
-            """Return a function of checking if score is able to prune the rest of moves,
-            or update the value of alpha or beta."""
-            if maximizing_player:
-                def _fn(score, move):
-                    if score >= references["beta"]:
-                        # Prune the rest of moves
-                        return score, move
-                    if score > references["alpha"]:
-                        # Update the value of alpha
-                        references["alpha"], references["best_move"] = score, move
-                    return None, None
-            else:
-                def _fn(score, move):
-                    if score <= references["alpha"]:
-                        # Prune the rest of moves
-                        return score, move
-                    if score < references["beta"]:
-                        # Update the value of beta
-                        references["beta"], references["best_move"] = score, move
-                    return None, None
-            return _fn
-        check_fn = get_check_fn(maximizing_player)
 
-        if depth == 1:
-            # When reaching to the leaf
-            for move in legal_moves:
-                score, move = check_fn(self.score(game.forecast_move(move), self), move)
-                if move:
-                    return score, move
-        else:
-            # Go down next level
-            for move in legal_moves:
-                score, _ = self.alphabeta(game.forecast_move(move),
-                                          depth-1,
-                                          references["alpha"],
-                                          references["beta"],
-                                          not maximizing_player)
-                score, move = check_fn(score, move)
-                if move:
-                    return score, move
+        legal_moves, best_move = game.get_legal_moves(), (-1, -1)
+        if not legal_moves or depth <= 0:
+            return self.score(game, self), best_move
+
         if maximizing_player:
-            return references["alpha"], references["best_move"]
+            best_score = alpha
+            for move in legal_moves:
+                next_state = game.forecast_move(move)
+                score, _ = self.alphabeta(next_state, depth-1, alpha, beta, False)
+                if score >= beta:
+                    return score, move
+                if score > best_score:
+                    best_score, alpha, best_move = score, score, move
         else:
-            return references["beta"], references["best_move"]
+            best_score = beta
+            for move in legal_moves:
+                next_state = game.forecast_move(move)
+                score, _ = self.alphabeta(next_state, depth-1, alpha, beta, True)
+                if score <= alpha:
+                    return score, move
+                if score < best_score:
+                    best_score, beta, best_move = score, score, move
+        return best_score, best_move
